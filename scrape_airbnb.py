@@ -41,6 +41,7 @@ class ScrapeAirbnb:
         return df
 
     def save_results(self, data: pd.DataFrame):
+        data['Id'] = "'" + data['Id'].astype(str) 
         data.to_csv("results.csv", index=False)
         
     def remove_punctuation(self, text) -> str:
@@ -80,6 +81,11 @@ class ScrapeAirbnb:
             else:
                 return None
 
+    def extract_id (self, url):
+        match = re.search(r'/rooms/(\d+)',url)
+        if match: return str(match.group(1))
+        return None
+    
     def is_date_greater_than_today(self, date_str):
         # Define the date format
         date_format = "%d/%m/%Y"
@@ -97,7 +103,7 @@ class ScrapeAirbnb:
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         return soup
 
-    def extract_days_data(self, tables, page_id):
+    def extract_days_data(self, tables, page_id, url):
         # Function to extract days data from tables
         days = []
         for idx, table in enumerate(tables):
@@ -110,6 +116,7 @@ class ScrapeAirbnb:
                     if div_element:
                         day_data = {
                             "Id": page_id,
+                            'url': url,
                             "date": day_date,
                             "blocked": div_element.get('data-is-day-blocked'),
                             "day_number": div_element.text.strip(),
@@ -124,11 +131,16 @@ class ScrapeAirbnb:
         print("Data is being collected ...")
         results = pd.DataFrame()
         for index, row in self.data.iterrows():
-            id = row["id"]
-            soup = self.read_page(row["url"])
+            url= row["url"]
+            id = self.extract_id(url)
+            print(id)
+            soup = self.read_page(url)
             tables = soup.find_all('table', {'class': self.table_class})
-            days = self.extract_days_data(tables, page_id=id)
+            days = self.extract_days_data(tables, page_id=id, url=url)
             results = self.merge_dataframes(results, self.convert_to_dataframe(days))
+            
+            if index == 3 :
+                break
         self.save_results(results)
         self.driver.quit()
         print("Data Collected Successfully.")
